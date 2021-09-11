@@ -1,10 +1,14 @@
 /* exported init */
 
+const { GObject } = imports.gi;
+
 const Main = imports.ui.main;
 const AppFavorites = imports.ui.appFavorites;
 const Dash = imports.ui.dash;
 const DND = imports.ui.dnd;
 const AppDisplay = imports.ui.appDisplay;
+
+const DashToPanelIconGTypeName = 'Gjs_dash-to-panel_jderose9_github_com_utils_DashToPanel_TaskbarAppIcon';
 
 // dash shouldn't accept drop from appdisplay if app is already in dash (favourites)
 class DashMod {
@@ -71,7 +75,7 @@ class AppdisplayMod {
     }
 
     acceptDrop(source) {
-        if (source instanceof Dash.DashIcon) {
+        if (source instanceof Dash.DashIcon || GObject.type_name(source) === DashToPanelIconGTypeName) {
             // drop is from dash, remove app
             if (this._appFavorites.isFavorite(source.id))
                 this._appFavorites.removeFavorite(source.id);
