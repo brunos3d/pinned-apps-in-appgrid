@@ -110,6 +110,36 @@ class DummyAppFavorites {
     }
 }
 
+/// to change `_appFavorites` of AppFolders
+class FolderViewMod {
+    constructor(appDisplay) {
+        this._appDisplay = appDisplay;
+        this._appFavorites = new DummyAppFavorites();
+        this._unmod_redisplay = AppDisplay.FolderView.prototype._redisplay;
+    }
+
+    applyMod() {
+        this._changeFavorites(this._appFavorites);
+    }
+
+    removeMod() {
+        this._changeFavorites(AppFavorites.getAppFavorites());
+        AppDisplay.FolderView.prototype._redisplay = this._unmod_redisplay;
+    }
+
+    _changeFavorites(appFavorites) {
+        const _unmod_redisplay = this._unmod_redisplay;
+        AppDisplay.FolderView.prototype._redisplay = function (...args) {
+            // `this` here is folderview
+            this._appFavorites = appFavorites;
+            _unmod_redisplay.call(this, ...args);
+        };
+
+        // to apply changes(change _appFavorites) for folders which are already created
+        this._appDisplay._redisplay();
+    }
+}
+
 class Extension {
     constructor() {
         this._appDisplay = Main.overview._overview.controls._appDisplay;
@@ -119,12 +149,14 @@ class Extension {
         this._mods = [
             new AppdisplayMod(this._appDisplay),
             new DashMod(),
+            new FolderViewMod(this._appDisplay),
         ];
 
         this._appDisplay._appFavorites = new DummyAppFavorites();
-        this._appDisplay._redisplay();
-
         this._mods.forEach(mod => mod.applyMod());
+
+        // redisplay after all mods are applied
+        this._appDisplay._redisplay();
     }
 
     disable() {
