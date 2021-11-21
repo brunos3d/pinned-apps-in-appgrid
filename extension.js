@@ -142,6 +142,7 @@ class FolderViewMod {
 
 class Extension {
     constructor() {
+        this._mods = [];
         this._appDisplay = Main.overview._overview.controls._appDisplay;
     }
 
@@ -161,6 +162,7 @@ class Extension {
 
     disable() {
         this._mods.reverse().forEach(mod => mod.removeMod());
+        this._mods = [];
 
         // this returns singleton class
         this._appDisplay._appFavorites = AppFavorites.getAppFavorites();

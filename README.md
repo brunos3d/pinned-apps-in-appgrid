@@ -8,6 +8,8 @@ This extension makes them appear in application grid as well.
 
 #### From git repo
 ```
+git clone https://gitlab.gnome.org/harshadgavali/favourites-in-appgrid.git/
+cd favourites-in-appgrid
 make
 ```
 
