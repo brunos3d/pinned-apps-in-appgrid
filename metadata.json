@@ -4,8 +4,9 @@
   "uuid": "favourites-in-appgrid@harshadgavali.gitlab.org",
   "shell-version": [
     "40",
-    "41"
+    "41",
+    "42"
   ],
   "url": "https://gitlab.gnome.org/harshadgavali/favourites-in-appgrid/",
-  "version": 1
+  "version": 2
 }
