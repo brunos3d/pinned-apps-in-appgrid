@@ -42,7 +42,7 @@ class DashMod {
 }
 
 // appdisplay shouldn't accept drop from dash at all
-// is app from dash is dropped onto appdisplay, remove it from dash
+// if app from dash is dropped onto appdisplay, remove it from dash
 class AppdisplayMod {
     constructor(appDisplay) {
         this._appDisplay = appDisplay;
