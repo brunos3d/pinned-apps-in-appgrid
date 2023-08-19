@@ -14,16 +14,16 @@ const DashToPanelIconGTypeName = 'Gjs_dash-to-panel_jderose9_github_com_utils_Da
 class DashMod {
     constructor() {
         this._appFavorites = AppFavorites.getAppFavorites();
-        this._unmod_getAppFromSource = Dash.getAppFromSource;
+        this._unmod_getAppFromSource = Dash.Dash.getAppFromSource;
     }
 
     applyMod() {
         // this hack may not work in future, as getAppFromSource might not be exported outside file
-        Dash.getAppFromSource = this.getAppFromSource.bind(this);
+        Dash.Dash.getAppFromSource = this.getAppFromSource.bind(this);
     }
 
     removeMod() {
-        Dash.getAppFromSource = this._unmod_getAppFromSource;
+        Dash.DashgetAppFromSource = this._unmod_getAppFromSource;
     }
 
     getAppFromSource(source) {
