@@ -1,12 +1,12 @@
 /* exported init */
 
-const { GObject } = imports.gi;
+import GObject from 'gi://GObject';
 
-const Main = imports.ui.main;
-const AppFavorites = imports.ui.appFavorites;
-const Dash = imports.ui.dash;
-const DND = imports.ui.dnd;
-const AppDisplay = imports.ui.appDisplay;
+import * as Main from 'resource:///org/gnome/shell/ui/main.js';
+import * as AppFavorites from 'resource:///org/gnome/shell/ui/appFavorites.js';
+import * as Dash from 'resource:///org/gnome/shell/ui/dash.js';
+import * as DND from 'resource:///org/gnome/shell/ui/dnd.js';
+import * as AppDisplay from 'resource:///org/gnome/shell/ui/appDisplay.js';
 
 const DashToPanelIconGTypeName = 'Gjs_dash-to-panel_jderose9_github_com_utils_DashToPanel_TaskbarAppIcon';
 
