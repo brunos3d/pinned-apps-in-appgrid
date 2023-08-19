@@ -140,7 +140,7 @@ class FolderViewMod {
     }
 }
 
-class Extension {
+export default class Extension {
     constructor() {
         this._mods = [];
         this._appDisplay = Main.overview._overview.controls._appDisplay;
@@ -168,8 +168,4 @@ class Extension {
         this._appDisplay._appFavorites = AppFavorites.getAppFavorites();
         this._appDisplay._redisplay();
     }
-}
-
-function init() {
-    return new Extension();
 }
