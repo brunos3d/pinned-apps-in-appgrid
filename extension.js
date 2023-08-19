@@ -1,4 +1,4 @@
-/* exported init */
+/* exported Extension */
 
 import GObject from 'gi://GObject';
 
