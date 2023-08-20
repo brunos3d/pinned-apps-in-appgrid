@@ -3,11 +3,7 @@
   "description": "Keep favourite applications in AppGrid",
   "uuid": "favourites-in-appgrid@harshadgavali.gitlab.org",
   "shell-version": [
-    "40",
-    "41",
-    "42",
-    "43",
-    "44"
+    "45"
   ],
   "url": "https://gitlab.gnome.org/harshadgavali/favourites-in-appgrid/",
   "version": 3

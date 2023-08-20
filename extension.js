@@ -1,12 +1,12 @@
-/* exported init */
+/* exported Extension */
 
-const { GObject } = imports.gi;
+import GObject from 'gi://GObject';
 
-const Main = imports.ui.main;
-const AppFavorites = imports.ui.appFavorites;
-const Dash = imports.ui.dash;
-const DND = imports.ui.dnd;
-const AppDisplay = imports.ui.appDisplay;
+import * as Main from 'resource:///org/gnome/shell/ui/main.js';
+import * as AppFavorites from 'resource:///org/gnome/shell/ui/appFavorites.js';
+import * as Dash from 'resource:///org/gnome/shell/ui/dash.js';
+import * as DND from 'resource:///org/gnome/shell/ui/dnd.js';
+import * as AppDisplay from 'resource:///org/gnome/shell/ui/appDisplay.js';
 
 const DashToPanelIconGTypeName = 'Gjs_dash-to-panel_jderose9_github_com_utils_DashToPanel_TaskbarAppIcon';
 
@@ -14,16 +14,16 @@ const DashToPanelIconGTypeName = 'Gjs_dash-to-panel_jderose9_github_com_utils_Da
 class DashMod {
     constructor() {
         this._appFavorites = AppFavorites.getAppFavorites();
-        this._unmod_getAppFromSource = Dash.getAppFromSource;
+        this._unmod_getAppFromSource = Dash.Dash.getAppFromSource;
     }
 
     applyMod() {
         // this hack may not work in future, as getAppFromSource might not be exported outside file
-        Dash.getAppFromSource = this.getAppFromSource.bind(this);
+        Dash.Dash.getAppFromSource = this.getAppFromSource.bind(this);
     }
 
     removeMod() {
-        Dash.getAppFromSource = this._unmod_getAppFromSource;
+        Dash.DashgetAppFromSource = this._unmod_getAppFromSource;
     }
 
     getAppFromSource(source) {
@@ -140,7 +140,7 @@ class FolderViewMod {
     }
 }
 
-class Extension {
+export default class Extension {
     constructor() {
         this._mods = [];
         this._appDisplay = Main.overview._overview.controls._appDisplay;
@@ -168,8 +168,4 @@ class Extension {
         this._appDisplay._appFavorites = AppFavorites.getAppFavorites();
         this._appDisplay._redisplay();
     }
-}
-
-function init() {
-    return new Extension();
 }
