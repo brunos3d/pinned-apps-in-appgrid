@@ -1,7 +1,9 @@
+HOST_CMD_PREFIX=$(if ${FLATPAK_ID},flatpak-spawn --host,)
+
 all: pack update
 
 pack:
-	gnome-extensions pack --force
+	${HOST_CMD_PREFIX} gnome-extensions pack --force
 
 update:
-	gnome-extensions install --force *.shell-extension.zip
+	${HOST_CMD_PREFIX} gnome-extensions install --force *.shell-extension.zip

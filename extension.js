@@ -4,84 +4,116 @@ import GObject from 'gi://GObject';
 
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import * as AppFavorites from 'resource:///org/gnome/shell/ui/appFavorites.js';
-import * as Dash from 'resource:///org/gnome/shell/ui/dash.js';
+import * as DashModule from 'resource:///org/gnome/shell/ui/dash.js';
 import * as DND from 'resource:///org/gnome/shell/ui/dnd.js';
 import * as AppDisplay from 'resource:///org/gnome/shell/ui/appDisplay.js';
+import * as ExtensionModule from 'resource:///org/gnome/shell/extensions/extension.js';
 
-const DashToPanelIconGTypeName = 'Gjs_dash-to-panel_jderose9_github_com_utils_DashToPanel_TaskbarAppIcon';
+const DashToPanelIconGTypeName = 'Gjs_dash-to-panel_jderose9_github_com_appIcons_TaskbarAppIcon';
 
 // dash shouldn't accept drop from appdisplay if app is already in dash (favourites)
 class DashMod {
     constructor() {
         this._appFavorites = AppFavorites.getAppFavorites();
-        this._unmod_getAppFromSource = Dash.Dash.getAppFromSource;
+        this._injectionManager = new ExtensionModule.InjectionManager();
+
+        this._injectionManager.overrideMethod(
+            DashModule.Dash,
+            'getAppFromSource',
+            this._createGetAppFromSource.bind(this),
+        );
     }
 
-    applyMod() {
-        // this hack may not work in future, as getAppFromSource might not be exported outside file
-        Dash.Dash.getAppFromSource = this.getAppFromSource.bind(this);
+    clear() {
+        this._injectionManager.clear();
     }
 
-    removeMod() {
-        Dash.DashgetAppFromSource = this._unmod_getAppFromSource;
-    }
+    _createGetAppFromSource(originalMethod) {
+        const appFavorites = this._appFavorites;
 
-    getAppFromSource(source) {
-        if (source instanceof Dash.DashIcon)
-            return source.app;
-
-        if (source instanceof AppDisplay.AppIcon) {
-            // do not accept drop, if app is already in favorite
-            if (this._appFavorites.isFavorite(source.app.get_id()))
-                return null;
-            return source.app;
+        /** @this {DashModule.Dash} */
+        return function (source) {
+            if (source instanceof AppDisplay.AppIcon) {
+                // do not accept drop, if app is already in favorite
+                if (appFavorites.isFavorite(source.app.get_id()))
+                    return null;
+                return source.app;
+            }
+            return originalMethod.call(this, source);
         }
-
-        return null;
     }
 }
 
 // appdisplay shouldn't accept drop from dash at all
 // if app from dash is dropped onto appdisplay, remove it from dash
-class AppdisplayMod {
+class AppDisplayMod {
+    /**
+     * @param {AppDisplay.AppDisplay} appDisplay
+     */
     constructor(appDisplay) {
         this._appDisplay = appDisplay;
-
         this._appFavorites = AppFavorites.getAppFavorites();
-        this._unmod_acceptDrop = this._appDisplay.acceptDrop.bind(this._appDisplay);
-        this._unmod_connectDnD = this._appDisplay._connectDnD.bind(this._appDisplay);
+        this._injectionManager = new ExtensionModule.InjectionManager();
+
+        this._injectionManager.overrideMethod(
+            this._appDisplay,
+            '_onDragMotion',
+            this._createOnDragMotion.bind(this),
+        );
+
+        this._injectionManager.overrideMethod(
+            this._appDisplay,
+            'acceptDrop',
+            this._createAcceptDrop.bind(this),
+        );
+
+        this._reconnectDnD();
     }
 
-    applyMod() {
-        this._appDisplay.acceptDrop = this.acceptDrop.bind(this);
-        this._appDisplay._connectDnD = this._connectDnD.bind(this);
+    clear() {
+        this._injectionManager.clear();
+        this._reconnectDnD();
     }
 
-    removeMod() {
-        this._appDisplay.acceptDrop = this._unmod_acceptDrop;
-        this._appDisplay._connectDnD = this._unmod_connectDnD;
+    _reconnectDnD() {
+        this._appDisplay._disconnectDnD();
+        this._appDisplay._connectDnD();
     }
 
-    _connectDnD() {
-        this._unmod_connectDnD();
-        if (this._appDisplay._dragBeginId > 0) {
-            Main.overview.disconnect(this._appDisplay._dragBeginId);
-            this._appDisplay._dragBeginId = Main.overview.connect('item-drag-begin', (overview, source) => {
-                // do not accept drop into appdisplay from dash
-                if (!(source instanceof Dash.DashIcon))
-                    this._appDisplay._onDragBegin.call(this._appDisplay, overview, source);
-            });
+    _isDashIcon(source) {
+        return (
+            source instanceof DashModule.DashIcon ||
+            GObject.type_name(source) === DashToPanelIconGTypeName
+        );
+    }
+
+    _createOnDragMotion(originalMethod) {
+        const mod = this;
+
+        /** @this {AppDisplay.AppDisplay} */
+        return function (dragEvent) {
+            // do nothing if item was dragged from dash
+            if (mod._isDashIcon(dragEvent.source))
+                return DND.DragDropResult.CONTINUE;
+            return originalMethod.call(mod._appDisplay, dragEvent);
         }
     }
 
-    acceptDrop(source) {
-        if (source instanceof Dash.DashIcon || GObject.type_name(source) === DashToPanelIconGTypeName) {
-            // drop is from dash, remove app
-            if (this._appFavorites.isFavorite(source.id))
-                this._appFavorites.removeFavorite(source.id);
-            return DND.DragDropResult.SUCCESS;
+    _createAcceptDrop(originalMethod) {
+        const mod = this;
+        const appFavorites = this._appFavorites;
+
+        /** @this {AppDisplay.AppDisplay} */
+        return function (source) {
+            if (mod._isDashIcon(source)) {
+                // drop is from dash, remove app
+                if (appFavorites.isFavorite(source.id))
+                    appFavorites.removeFavorite(source.id);
+                return DND.DragDropResult.SUCCESS;
+            }
+
+            return originalMethod.call(this, source);
         }
-        return this._unmod_acceptDrop(source);
     }
 }
 
@@ -100,72 +132,68 @@ class DummyAppFavorites {
     removeFavorite(id) {
         return this._appFavorites.removeFavorite(id);
     }
-
-    connect(signal, callback) {
-        return this._appFavorites.connect(signal, callback);
-    }
-
-    disconnect(id) {
-        return this._appFavorites.disconnect(id);
-    }
 }
 
 /// to change `_appFavorites` of AppFolders
-class FolderViewMod {
+class BaseAppViewMod {
+    /**
+     * @param {AppDisplay.AppDisplay} appDisplay
+     */
     constructor(appDisplay) {
         this._appDisplay = appDisplay;
-        this._appFavorites = new DummyAppFavorites();
-        this._unmod_redisplay = AppDisplay.FolderView.prototype._redisplay;
-    }
+        /** @type {AppFavorites.IAppFavorites} */
+        this._dummyAppFavorites = new DummyAppFavorites();
+        this._injectionManager = new ExtensionModule.InjectionManager();
 
-    applyMod() {
-        this._changeFavorites(this._appFavorites);
-    }
-
-    removeMod() {
-        this._changeFavorites(AppFavorites.getAppFavorites());
-        AppDisplay.FolderView.prototype._redisplay = this._unmod_redisplay;
-    }
-
-    _changeFavorites(appFavorites) {
-        const _unmod_redisplay = this._unmod_redisplay;
-        AppDisplay.FolderView.prototype._redisplay = function (...args) {
-            // `this` here is folderview
-            this._appFavorites = appFavorites;
-            _unmod_redisplay.call(this, ...args);
-        };
-
-        // to apply changes(change _appFavorites) for folders which are already created
+        this._injectionManager.overrideMethod(
+            AppDisplay.FolderView.prototype,
+            '_redisplay',
+            this._createRedisplay.bind(this),
+        );
+        this._injectionManager.overrideMethod(
+            AppDisplay.AppDisplay.prototype,
+            '_redisplay',
+            this._createRedisplay.bind(this),
+        );
         this._appDisplay._redisplay();
+    }
+
+    clear() {
+        // change appFavorites to default 
+        this._dummyAppFavorites = AppFavorites.getAppFavorites();
+        this._appDisplay._redisplay();
+
+        this._injectionManager.clear();
+    }
+
+    _createRedisplay(originalMethod) {
+        const mod = this;
+
+        /** @this {AppDisplay.FolderView | AppDisplay.AppDisplay} */
+        return function () {
+            this._appFavorites = mod._dummyAppFavorites;
+            originalMethod.call(this);
+        };
     }
 }
 
 export default class Extension {
     constructor() {
         this._mods = [];
-        this._appDisplay = Main.overview._overview.controls._appDisplay;
+        /** @type {AppDisplay.AppDisplay} */
+        this._appDisplay = Main.overview._overview.controls.appDisplay;
     }
 
     enable() {
         this._mods = [
-            new AppdisplayMod(this._appDisplay),
+            new BaseAppViewMod(this._appDisplay),
+            new AppDisplayMod(this._appDisplay),
             new DashMod(),
-            new FolderViewMod(this._appDisplay),
         ];
-
-        this._appDisplay._appFavorites = new DummyAppFavorites();
-        this._mods.forEach(mod => mod.applyMod());
-
-        // redisplay after all mods are applied
-        this._appDisplay._redisplay();
     }
 
     disable() {
-        this._mods.reverse().forEach(mod => mod.removeMod());
+        this._mods.reverse().forEach(mod => mod.clear());
         this._mods = [];
-
-        // this returns singleton class
-        this._appDisplay._appFavorites = AppFavorites.getAppFavorites();
-        this._appDisplay._redisplay();
     }
 }
