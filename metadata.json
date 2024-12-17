@@ -1,10 +1,8 @@
 {
-  "name": "Favourites in AppGrid",
-  "description": "Keep favourite applications in AppGrid",
-  "uuid": "favourites-in-appgrid@harshadgavali.gitlab.org",
-  "shell-version": [
-    "45"
-  ],
-  "url": "https://gitlab.gnome.org/harshadgavali/favourites-in-appgrid/",
-  "version": 5
+  "name": "Keep pinned apps in AppGrid",
+  "description": "Display your pinned/favorite applications in the AppGrid while preserving your existing Dash-to-Dock layout and arrangement.",
+  "uuid": "pinned-apps-in-appgrid@brunosilva.io",
+  "shell-version": ["45", "46", "47"],
+  "url": "https://github.com/brunos3d/pinned-apps-in-appgrid",
+  "version": 1
 }
