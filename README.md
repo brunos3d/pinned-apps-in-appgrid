@@ -21,6 +21,14 @@ This project is a fork of the [favourites\-in\-appgrid](https://gitlab.gnome.org
 
 ## Installation
 
+### 1. Easy Way
+
+Go and grab it from GNOME Extensions
+
+https://extensions.gnome.org/extension/7660/keep-pinned-apps-in-appgrid/
+
+### 2. DIY Locally
+
 1.  Clone the repository:
 
 ```bash
