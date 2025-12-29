@@ -1,6 +1,5 @@
 # Pinned Apps in AppGrid
 
-
 ## Overview
 
 Starting with GNOME 40, favorite applications are only displayed in the dock. This extension brings them back to the application grid, allowing you to keep your pinned/favorite apps visible in both places without interfering with your existing Dash-to-Dock layout.
@@ -26,6 +25,8 @@ This project is a fork of the [favourites\-in\-appgrid](https://gitlab.gnome.org
 Go and grab it from GNOME Extensions
 
 https://extensions.gnome.org/extension/7660/keep-pinned-apps-in-appgrid/
+
+[<img src="https://github.com/andyholmes/gnome-shell-extensions-badge/raw/master/get-it-on-ego.png" width="175">](https://extensions.gnome.org/extension/7660/keep-pinned-apps-in-appgrid/)
 
 ### 2. DIY Locally
 
