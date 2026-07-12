@@ -74,33 +74,15 @@ class AppDisplayMod {
     this._appFavorites = AppFavorites.getAppFavorites();
     this._injectionManager = new ExtensionModule.InjectionManager();
 
-    this._injectionManager.overrideMethod(this._appDisplay, '_onDragMotion', this._createOnDragMotion.bind(this));
     this._injectionManager.overrideMethod(this._appDisplay, 'acceptDrop', this._createAcceptDrop.bind(this));
-
-    this._reconnectDnD();
   }
 
   clear() {
     this._injectionManager.clear();
-    this._reconnectDnD();
-  }
-
-  _reconnectDnD() {
-    this._appDisplay._disconnectDnD();
-    this._appDisplay._connectDnD();
   }
 
   _isDashIcon(source) {
     return source instanceof DashModule.DashIcon || GObject.type_name(source) === DashToPanelIconGTypeName;
-  }
-
-  _createOnDragMotion(originalMethod) {
-    const mod = this;
-
-    /** @this {AppDisplay.AppDisplay} */
-    return function (dragEvent) {
-      return originalMethod.call(mod._appDisplay, dragEvent);
-    };
   }
 
   _createAcceptDrop(originalMethod) {
