@@ -1,7 +1,32 @@
 /*
- * This file is part of https://github.com/brunos3d/pinned-apps-in-appgrid.
- * It is a modified version of https://gitlab.gnome.org/harshadgavali/favourites-in-appgrid.
- * This project is licensed under the GNU General Public License v3.0.
+ * Keep Pinned Apps in AppGrid  (pinned-apps-in-appgrid@brunosilva.io)
+ * https://github.com/brunos3d/pinned-apps-in-appgrid
+ *
+ * A GNOME Shell extension that keeps favorite/pinned applications visible in the
+ * AppGrid (and inside folders) while they also remain in the Dash/Dock. Since
+ * GNOME 40 the Shell hides favorites from the grid; this extension restores them
+ * there without disturbing the Dash or an auto-hide dock layout.
+ *
+ * Licensed under the GNU General Public License v3.0. See the LICENSE file.
+ *
+ *
+ * ARCHITECTURE
+ * ------------
+ * Extension.enable() installs a list of small, independent "mods". Each mod patches
+ * one or more GNOME Shell methods through InjectionManager (or connects a signal) in
+ * its constructor and fully undoes that work in clear(). disable() clears the mods in
+ * reverse order, so every behavior change stays isolated and individually reversible.
+ *
+ *   BaseAppViewMod    - the core trick: makes favorites render in the grid and folders.
+ *   AppDisplayMod     - dropping a dash icon onto the grid unpins it (drag to remove).
+ *   DashMod           - dragging a grid icon onto the dash never creates a duplicate.
+ *   DockVisibilityMod - keeps an auto-hide dock visible for the duration of a drag.
+ *
+ * The extension leans on GNOME Shell *private* internals (_appFavorites, _redisplay,
+ * _folderIcons, getAppFromSource, the Dash/AppIcon classes, ...). These are unstable
+ * across Shell versions, so enable() is wrapped in a try/catch that rolls back cleanly
+ * if one of them is missing on a future release. Supported versions live in
+ * metadata.json.
  */
 
 /* exported Extension */
@@ -15,13 +40,25 @@ import * as DND from 'resource:///org/gnome/shell/ui/dnd.js';
 import * as AppDisplay from 'resource:///org/gnome/shell/ui/appDisplay.js';
 import * as ExtensionModule from 'resource:///org/gnome/shell/extensions/extension.js';
 
+// GType name of Dash to Panel's taskbar icons. They are not instances of the Shell's
+// DashIcon, so drag sources coming from a Dash to Panel taskbar can only be recognized
+// by their registered GObject type name. Used by AppDisplayMod._isDashIcon().
 const DashToPanelIconGTypeName = 'Gjs_dash-to-panel_jderose9_github_com_appIcons_TaskbarAppIcon';
 
 /**
- * DashMod - Handles drag and drop behavior for the Dash
+ * DashMod - Controls what a drag source resolves to when dropped on the Dash.
  *
- * Prevents duplicate favorite apps from being added to the dash when dragging
- * from the app grid. Allows rearranging icons within the dash itself.
+ * The Dash turns a drag source into an app through the static Dash.getAppFromSource();
+ * handleDragOver()/acceptDrop() then use that app to reorder or pin favorites. Because
+ * this extension puts favorite icons into the AppGrid too, a favorite can now be
+ * dragged from the grid onto the dash, which natively would add a second copy of an app
+ * that is already pinned.
+ *
+ * The override:
+ *   - lets DashIcon sources through unchanged, so reordering existing dash icons works;
+ *   - returns null for an AppGrid AppIcon whose app is already a favorite, blocking the
+ *     duplicate; a non-favorite grid icon still resolves normally so it can be pinned;
+ *   - falls back to the original behavior for any other source.
  */
 class DashMod {
   constructor() {
@@ -60,10 +97,18 @@ class DashMod {
 }
 
 /**
- * AppDisplayMod - Handles drag and drop behavior for the AppDisplay
+ * AppDisplayMod - Unpins an app when its dash icon is dropped onto the AppGrid.
  *
- * When apps from the dash are dropped onto the app display, they are removed
- * from favorites (unpinned from the dash).
+ * Dropping a dash icon on the grid is GNOME's native gesture for removing a favorite.
+ * The Shell implements it in AppDisplay.acceptDrop() by checking
+ * `this._appFavorites.isFavorite(source.id)`. BaseAppViewMod replaces that
+ * _appFavorites with a proxy whose isFavorite() always returns false, which
+ * (intentionally) makes favorites render in the grid but also disables the native
+ * unpin. This mod restores the unpin by consulting the *real* AppFavorites instead.
+ *
+ * It intentionally overrides only acceptDrop(): the drop delegate is resolved fresh by
+ * the DND machinery on every drop, and the grid's own drag-motion handler is re-bound
+ * on every drag, so nothing here needs to reconnect the AppDisplay's DnD signals.
  */
 class AppDisplayMod {
   /**
@@ -71,6 +116,7 @@ class AppDisplayMod {
    */
   constructor(appDisplay) {
     this._appDisplay = appDisplay;
+    // The real, unproxied favorites model, so unpin actually mutates the dock.
     this._appFavorites = AppFavorites.getAppFavorites();
     this._injectionManager = new ExtensionModule.InjectionManager();
 
@@ -81,6 +127,8 @@ class AppDisplayMod {
     this._injectionManager.clear();
   }
 
+  // True when the drag originates from a dock: the Shell's own DashIcon, or a
+  // Dash to Panel taskbar icon (matched by GType name since it is not a DashIcon).
   _isDashIcon(source) {
     return source instanceof DashModule.DashIcon || GObject.type_name(source) === DashToPanelIconGTypeName;
   }
@@ -92,13 +140,15 @@ class AppDisplayMod {
     /** @this {AppDisplay.AppDisplay} */
     return function (source) {
       if (mod._isDashIcon(source)) {
-        // If drop is from dash, remove app from favorites
+        // Dropped from the dock onto the grid: unpin it from favorites. Checked
+        // against the real model because the grid's _appFavorites is proxied.
         if (appFavorites.isFavorite(source.id)) {
           appFavorites.removeFavorite(source.id);
         }
         return DND.DragDropResult.SUCCESS;
       }
 
+      // Not a dock icon (e.g. moving/reordering a grid icon): keep native behavior.
       return originalMethod.call(this, source);
     };
   }
@@ -132,14 +182,20 @@ function createDummyAppFavorites() {
 }
 
 /**
- * BaseAppViewMod - Modifies AppDisplay and FolderView to show favorite apps
+ * BaseAppViewMod - The core trick: makes favorites appear in the grid and folders.
  *
- * This is the core of the extension. It:
- * 1. Replaces the _appFavorites reference with DummyAppFavorites
- * 2. Forces folder icon previews to update after redisplay
+ * The Shell excludes favorites from the AppGrid inside _loadApps() by testing
+ * _appFavorites.isFavorite(). By overriding _redisplay() on both AppDisplay and
+ * FolderView to swap in the createDummyAppFavorites() proxy (isFavorite() -> false)
+ * just before the original runs, the exclusion filter never removes anything, so
+ * favorites render in the grid and inside folders while still living in the dash.
  *
- * Without the folder icon update, favorite apps would appear inside folders when opened,
- * but would not show in the folder preview icons (the small 2x2 grid on folder icons).
+ * It also forces every folder icon to regenerate its preview after redisplay. Without
+ * that, a favorite added to a folder would show when the folder is opened but not in
+ * the small 2x2 preview thumbnail on the folder's icon (issue #3).
+ *
+ * clear() swaps the reference back to the real AppFavorites and redisplays once, so the
+ * grid returns to stock behavior before the method overrides are removed.
  */
 class BaseAppViewMod {
   /**
