@@ -216,15 +216,32 @@ export default class Extension {
   constructor() {
     this._mods = [];
     /** @type {AppDisplay.AppDisplay} */
-    this._appDisplay = Main.overview._overview.controls.appDisplay;
+    this._appDisplay = null;
   }
 
   enable() {
-    this._mods = [new BaseAppViewMod(this._appDisplay), new AppDisplayMod(this._appDisplay), new DashMod()];
+    // Fetch the appDisplay at enable() time rather than in the constructor:
+    // the extension can be enabled/disabled several times per session and the
+    // Shell may recreate the appDisplay, so a reference cached once can go stale.
+    this._appDisplay = Main.overview._overview.controls.appDisplay;
+    this._mods = [];
+
+    try {
+      this._mods.push(new BaseAppViewMod(this._appDisplay));
+      this._mods.push(new AppDisplayMod(this._appDisplay));
+      this._mods.push(new DashMod());
+    } catch (e) {
+      // If any patch fails (e.g. a private Shell API changed on a new Shell
+      // version), roll back everything already applied instead of leaving the
+      // Shell in a half-patched state.
+      logError(e, 'pinned-apps-in-appgrid: failed to enable, rolling back');
+      this.disable();
+    }
   }
 
   disable() {
     this._mods.reverse().forEach((mod) => mod.clear());
     this._mods = [];
+    this._appDisplay = null;
   }
 }
