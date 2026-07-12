@@ -212,6 +212,80 @@ class BaseAppViewMod {
   }
 }
 
+/**
+ * DockVisibilityMod - Keeps auto-hide docks visible while an item is being dragged.
+ *
+ * Vanilla GNOME's dash lives only in the overview and never auto-hides, so this is a
+ * no-op there. Auto-hide docks (Dash to Dock, and Dash to Panel which derives from it)
+ * decide their own visibility from a `requiresVisibility` flag on their dash. Some
+ * versions fail to set it during a drag (e.g. Dash to Dock intellihide re-evaluates
+ * mid-drag as the drag actor overlaps the dock), so the dock hides while the user is
+ * still dragging and reordering onto it becomes impossible.
+ *
+ * We set that flag for the duration of the drag and restore it afterwards. It only
+ * touches the `requiresVisibility` convention, gated behind feature detection (the
+ * presence of the dock's own `_requireVisibility()` method), and never reaches into a
+ * dock's private layout/animation internals. When no auto-hide dock is present it does
+ * nothing.
+ */
+class DockVisibilityMod {
+  constructor() {
+    this._changed = [];
+    this._overviewIds = [
+      Main.overview.connect('item-drag-begin', this._onDragBegin.bind(this)),
+      Main.overview.connect('item-drag-end', this._onDragEnd.bind(this)),
+      Main.overview.connect('item-drag-cancelled', this._onDragEnd.bind(this)),
+    ];
+  }
+
+  clear() {
+    this._overviewIds.forEach((id) => Main.overview.disconnect(id));
+    this._overviewIds = [];
+    // Drop any pending overrides without restoring: on disable the dock owns its
+    // own visibility again, and a drag can't be in progress across disable().
+    this._changed = [];
+  }
+
+  /**
+   * Candidate dash objects, from the most stable Shell paths, that belong to an
+   * auto-hide dock. Deduplicated. The vanilla dash is filtered out because it has no
+   * `_requireVisibility()` method and does not auto-hide.
+   */
+  _dockDashes() {
+    const candidates = [Main.overview?.dash, Main.overview?._overview?.controls?.dash];
+
+    const seen = new Set();
+    return candidates.filter((dash) => {
+      if (!dash || seen.has(dash) || typeof dash._requireVisibility !== 'function') {
+        return false;
+      }
+      seen.add(dash);
+      return true;
+    });
+  }
+
+  _onDragBegin() {
+    // Guard against a missed drag-end leaving stale state.
+    this._onDragEnd();
+
+    for (const dash of this._dockDashes()) {
+      this._changed.push([dash, dash.requiresVisibility]);
+      dash.requiresVisibility = true;
+    }
+  }
+
+  _onDragEnd() {
+    for (const [dash, previous] of this._changed) {
+      try {
+        dash.requiresVisibility = previous;
+      } catch {
+        // The dock may have been destroyed mid-drag (e.g. monitor change); ignore.
+      }
+    }
+    this._changed = [];
+  }
+}
+
 export default class Extension {
   constructor() {
     this._mods = [];
@@ -230,6 +304,7 @@ export default class Extension {
       this._mods.push(new BaseAppViewMod(this._appDisplay));
       this._mods.push(new AppDisplayMod(this._appDisplay));
       this._mods.push(new DashMod());
+      this._mods.push(new DockVisibilityMod());
     } catch (e) {
       // If any patch fails (e.g. a private Shell API changed on a new Shell
       // version), roll back everything already applied instead of leaving the
