@@ -105,25 +105,30 @@ class AppDisplayMod {
 }
 
 /**
- * DummyAppFavorites - A proxy for AppFavorites that always returns false for isFavorite()
+ * createDummyAppFavorites - Wraps the real AppFavorites singleton in a Proxy that
+ * reports every app as NOT a favorite (isFavorite() -> false) while transparently
+ * delegating every other property and method to the real instance.
  *
  * This tricks GNOME Shell into displaying favorite apps in the app grid and folders
- * by making it think they are not favorites. This allows favorites to appear in both
- * the dash and the app grid simultaneously.
+ * (both hide anything isFavorite() reports as true) without hiding them from the dash.
+ *
+ * Wrapping instead of replacing is deliberate: a partial stand-in that only implements
+ * isFavorite()/removeFavorite() would throw the moment the Shell called any other
+ * AppFavorites method on it during redisplay. Delegating everything keeps it correct
+ * across Shell versions; only isFavorite() is intercepted.
  */
-class DummyAppFavorites {
-  constructor() {
-    this._appFavorites = AppFavorites.getAppFavorites();
-  }
+function createDummyAppFavorites() {
+  const appFavorites = AppFavorites.getAppFavorites();
 
-  isFavorite() {
-    // Always return false to allow favorites to appear in app grid
-    return false;
-  }
+  return new Proxy(appFavorites, {
+    get(target, prop, receiver) {
+      if (prop === 'isFavorite')
+        return () => false;
 
-  removeFavorite(id) {
-    return this._appFavorites.removeFavorite(id);
-  }
+      const value = Reflect.get(target, prop, receiver);
+      return typeof value === 'function' ? value.bind(target) : value;
+    },
+  });
 }
 
 /**
@@ -143,7 +148,7 @@ class BaseAppViewMod {
   constructor(appDisplay) {
     this._appDisplay = appDisplay;
     /** @type {AppFavorites.IAppFavorites} */
-    this._dummyAppFavorites = new DummyAppFavorites();
+    this._dummyAppFavorites = createDummyAppFavorites();
     this._injectionManager = new ExtensionModule.InjectionManager();
 
     // Override _redisplay for both FolderView and AppDisplay
